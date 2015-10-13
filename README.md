@@ -104,10 +104,30 @@ simply held onto for the condition check, nothing else is done with them at this
 point.
 
 TODO show an example elasticsearch query
+TODO figure out how the results of that query will fill in a context object
 
 #### condition
 
-TODO maybe lua scripting?
+Once the query is performed the results are checked against this step to
+determine if they warrant performing the alert's actions. Conditionals are
+defined as lua scripts, either files or simply inline with the yaml itself. The
+query's result data can be accessed through the `ctx` global variable.
+
+```yaml
+condition:
+    lua_file: ./foo-condition.yml
+```
+
+**OR**
+
+```yaml
+condition:
+    lua_inline: |
+        if ctx.ResultCount > 10 then
+            return true
+        end
+        return false
+```
 
 #### actions
 
@@ -171,6 +191,31 @@ actions:
 
 ##### lua
 
-TODO not sure if this is going to be a thing. If we do lua scripting for
-conditions this should be pretty straightforward to also integrate. Basically
-just run an arbitrary lua script as an action.
+Similar to condition, lua can be used to perform virtually any action you might
+think of. Also, as in condition, the `ctx` global variable will be made
+available with all the result data from the query.
+
+Example:
+
+```
+actions:
+    - type: lua
+      lua_file: ./some-action.yml
+```
+
+**OR**
+
+```actions:
+    - type: lua
+      lua_inline: |
+        -- do some lua stuff here
+        -- no need to return anything
+```
+
+*Note that the go templating will still be applied to the lua action definition
+before it is processed. It's therefore possible to incorporate go template
+entities into your `lua_inline`. This is not recommended, as this would cause
+unbounded growth in the lua function cache, and the exact same data is available
+in `ctx` anyway. It's also possible to dynamically load different `lua_file`s
+depending on various conditions. It's not clear why this would be useful, but
+it's probably fine to do*
