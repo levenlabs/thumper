@@ -10,6 +10,7 @@ import (
 
 	"github.com/Shopify/go-lua"
 	"github.com/levenlabs/go-llog"
+	"github.com/levenlabs/thumper/config"
 )
 
 type cmd struct {
@@ -50,31 +51,48 @@ func RunFile(ctx interface{}, filename string) (bool, bool) {
 }
 
 type runner struct {
-	l *lua.State
+	id int // solely used to tell lua vms apart in logs
+	l  *lua.State
 
 	// Set of files and inline functions already in the global namespace
 	m map[string]bool
 }
 
 func init() {
-	newRunner()
+	for i := 0; i < config.LuaVMs; i++ {
+		newRunner(i)
+	}
 }
 
-func newRunner() {
+func newRunner(i int) {
 	l := lua.NewState()
 	lua.OpenLibraries(l)
 	r := runner{
-		l: l,
-		m: map[string]bool{},
+		id: i,
+		l:  l,
+		m:  map[string]bool{},
 	}
 	go r.spin()
 }
 
 func (r *runner) spin() {
+	kv := llog.KV{"runnerID": r.id}
+	llog.Info("initializing lua vm", kv)
+
+	if config.LuaInit != "" {
+		initKV := llog.KV{"runnerID": r.id, "filename": config.LuaInit}
+		initFnName, err := r.loadFile(config.LuaInit)
+		if err != nil {
+			initKV["err"] = err
+			llog.Fatal("error initializing lua vm", initKV)
+		}
+		r.l.Global(initFnName)
+		r.l.Call(0, 0)
+	}
+
 	for c := range cmdCh {
 		var fnName string
 		var err error
-		kv := llog.KV{}
 		if c.filename != "" {
 			kv["filename"] = c.filename
 			fnName, err = r.loadFile(c.filename)
@@ -90,7 +108,7 @@ func (r *runner) spin() {
 		}
 
 		kv["fnName"] = fnName
-		llog.Info("loaded lua function", kv)
+		llog.Debug("executing lua", kv)
 
 		pushArbitraryValue(r.l, c.ctx) // push ctx onto the stack
 		r.l.SetGlobal("ctx")           // set global variable "ctx" to ctx, pops it from stack
@@ -107,6 +125,8 @@ func (r *runner) loadFile(name string) (string, error) {
 	if r.m[key] {
 		return key, nil
 	}
+
+	llog.Info("loading lua file", llog.KV{"runnerID": r.id, "filename": name, "fnName": key})
 	f, err := os.Open(name)
 	if err != nil {
 		return "", err
@@ -127,6 +147,8 @@ func (r *runner) loadInline(code string) (string, error) {
 	if r.m[key] {
 		return key, nil
 	}
+
+	llog.Info("loading lua inline", llog.KV{"runnerID": r.id, "inline": code[:20], "fnName": key})
 	if err := r.l.Load(bytes.NewBufferString(code), key, "bt"); err != nil {
 		return "", err
 	}
