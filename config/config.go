@@ -12,6 +12,7 @@ var (
 	ElasticSearchAddr string
 	LuaInit           string
 	LuaVMs            int
+	PagerDutyKey      string
 	LogLevel          string
 )
 
@@ -32,6 +33,10 @@ func init() {
 		Default:     "1",
 	})
 	l.Add(lever.Param{
+		Name:        "--pagerduty-key",
+		Description: "PagerDuty api key, required if using any pagerduty actions",
+	})
+	l.Add(lever.Param{
 		Name:        "--log-level",
 		Description: "Adjust the log level. Valid options are: error, warn, info, debug",
 		Default:     "info",
@@ -42,5 +47,6 @@ func init() {
 	LuaInit, _ = l.ParamStr("--lua-init")
 	LuaVMs, _ = l.ParamInt("--lua-vms")
 	LogLevel, _ = l.ParamStr("--log-level")
+	PagerDutyKey, _ = l.ParamStr("--pagerduty-key")
 	llog.SetLevelFromString(LogLevel)
 }
