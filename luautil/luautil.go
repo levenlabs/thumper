@@ -11,7 +11,25 @@ import (
 	"github.com/Shopify/go-lua"
 	"github.com/levenlabs/go-llog"
 	"github.com/levenlabs/thumper/config"
+	"github.com/levenlabs/thumper/context"
 )
+
+// Lua performs some arbitrary lua code. The code can either be sourced from a
+// file or from a raw string (Inline).
+type LuaRunner struct {
+	File   string `yaml:"lua_file"`
+	Inline string `yaml:"lua_inline"`
+}
+
+// Do performs the actual lua code
+func (l *LuaRunner) Do(c context.Context) (bool, bool) {
+	if l.File != "" {
+		return RunFile(c, l.File)
+	} else if l.Inline != "" {
+		return RunInline(c, l.Inline)
+	}
+	return false, false
+}
 
 type cmd struct {
 	ctx              interface{}

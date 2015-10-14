@@ -6,6 +6,7 @@ import (
 	. "testing"
 
 	"github.com/levenlabs/thumper/context"
+	"github.com/levenlabs/thumper/luautil"
 
 	"gopkg.in/yaml.v2"
 
@@ -37,7 +38,7 @@ lua_file: foo
 lua_inline: bar`)
 	a = Action{}
 	require.Nil(t, yaml.Unmarshal(j, &a))
-	assert.Equal(t, &Lua{File: "foo", Inline: "bar"}, a.Actioner)
+	assert.Equal(t, &Lua{luautil.LuaRunner{File: "foo", Inline: "bar"}}, a.Actioner)
 }
 
 func TestHTTPAction(t *T) {

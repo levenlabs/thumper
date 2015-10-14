@@ -27,6 +27,7 @@ type Actioner interface {
 // Action is a wrapper around an Actioner which can be yaml unmarshalled into
 // easily
 type Action struct {
+	Type string
 	Actioner
 }
 
@@ -40,9 +41,9 @@ func (a *Action) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	if err := unmarshal(&at); err != nil {
 		return err
 	}
-	at.Type = strings.ToLower(at.Type)
+	a.Type = strings.ToLower(at.Type)
 
-	switch at.Type {
+	switch a.Type {
 	case "http":
 		a.Actioner = &HTTP{}
 	case "pagerduty":
@@ -50,7 +51,7 @@ func (a *Action) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	case "lua":
 		a.Actioner = &Lua{}
 	default:
-		return fmt.Errorf("invalid action type %q", at.Type)
+		return fmt.Errorf("invalid action type %q", a.Type)
 	}
 
 	if err := unmarshal(a.Actioner); err != nil {
@@ -134,25 +135,15 @@ func (p *PagerDuty) Do(c context.Context) error {
 	return err
 }
 
-// Lua performs some arbitrary lua code as an action. The code can either be
-// sourced from a file or from a raw string (Inline)
+// Lua is a wrapper around a LuaRunner which implements the Actioner interface
 type Lua struct {
-	File   string `yaml:"lua_file"`
-	Inline string `yaml:"lua_inline"`
+	luautil.LuaRunner `yaml:",inline"`
 }
 
-// Do performs the actual lua code
+// Do performs the lua action
 func (l *Lua) Do(c context.Context) error {
-	var ok bool
-	if l.File != "" {
-		_, ok = luautil.RunFile(c, l.File)
-	} else if l.Inline != "" {
-		_, ok = luautil.RunInline(c, l.Inline)
-	} else {
-		return errors.New("invalid lua action, no lua_file or lua_inline given")
-	}
-	if !ok {
-		return errors.New("failed to execute lua action")
+	if _, ok := l.LuaRunner.Do(c); !ok {
+		return errors.New("error running lua action")
 	}
 	return nil
 }
