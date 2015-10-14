@@ -17,8 +17,8 @@ as the actions which should be taken should a condition come back true. A single
 "alert" encompasses all of the following:
 
 * A time interval to perform the alert check at
-* A query to be performed against elasticsearch
-* A condition to check the query results against
+* A search to be performed against elasticsearch
+* A condition to check the search results against
 * A set of actions to take should the condition return true
 
 thumper runs with one or more alerts defined in its configuration, each one
@@ -82,7 +82,7 @@ A single alert has the following fields in its document (all are required):
 ---
 name: something_unique
 interval: 5 * * * *
-query: # see the query subsection
+search: # see the search subsection
 condition: # see the condition subsection
 actions: # see the actions subsection
 ```
@@ -94,24 +94,44 @@ of the defined alerts.
 
 #### interval
 
-A cron-style interval string describing when the query should be run and have
+A cron-style interval string describing when the search should be run and have
 the condition checked against it.
 
-#### query
+#### search
 
-The query which should be performed against elasticsearch. The results are
+The search which should be performed against elasticsearch. The results are
 simply held onto for the condition check, nothing else is done with them at this
 point.
 
-TODO show an example elasticsearch query
-TODO figure out how the results of that query will fill in a context object
+```yaml
+# conveniently, json is valid yaml
+search: {
+        "query": {
+            "query_string": {
+                "query":"severity:fatal"
+            }
+        }
+}
+```
+
+As a shortcut, since a `query_string` is used so often, the abofe can also
+simply be written as:
+
+```yaml
+search: "severity:fatal"
+```
+
+See the [query dsl][querydsl] docs for more on how to formulate query objects.
+See the [query string][querystring] docs for more on how to formulate query
+strings.
 
 #### condition
 
-Once the query is performed the results are checked against this step to
+Once the search is performed the results are checked against this step to
 determine if they warrant performing the alert's actions. Conditionals are
 defined as lua scripts, either files or simply inline with the yaml itself. The
-query's result data can be accessed through the `ctx` global variable.
+search result's data can be accessed through the `ctx` global variable. See the
+alert context section for all available fields in `ctx`.
 
 ```yaml
 condition:
@@ -123,7 +143,7 @@ condition:
 ```yaml
 condition:
     lua_inline: |
-        if ctx.ResultCount > 10 then
+        if ctx.HitCount > 10 then
             return true
         end
         return false
@@ -136,11 +156,9 @@ in the list is a dict with a `type` key describing the action's type, the rest
 of the possible keys differ based on what the type is.
 
 Each action dict, before actually being processed, is run through golang's
-`template/text` system with the action's object as the root template object. You
-can see examples of using this object in the following subsections.
-
-TODO document available fields in the root template object in the `query`
-section, since the condition section will need to use them as well
+`template/text` system with the action's context object as the root template object. You
+can see examples of using this object in the following subsections. See the
+alert context section for all fields available in the context.
 
 ##### http
 
@@ -193,7 +211,7 @@ actions:
 
 Similar to condition, lua can be used to perform virtually any action you might
 think of. Also, as in condition, the `ctx` global variable will be made
-available with all the result data from the query.
+available with all the result data from the search.
 
 Example:
 
@@ -219,3 +237,53 @@ unbounded growth in the lua function cache, and the exact same data is available
 in `ctx` anyway. It's also possible to dynamically load different `lua_file`s
 depending on various conditions. It's not clear why this would be useful, but
 it's probably fine to do*
+
+### Alert context
+
+Through its lifecycle each alert has a context object attached to it. The
+results from the search step are included in it, as well as other data. Here is
+a description of the available data in the context, as well as how to use it
+
+*NOTE THAT THE CONTEXT IS READ-ONLY IN ALL CASES*
+
+#### Context fields
+
+// Hit describes one of the documents matched by a search query
+type Hit struct {
+}
+
+```
+{
+    Name      string // The alert's name
+    StartedTS uint64 // The timestamp the alert started at
+
+    // The following are filled in by the search step
+    TookMS      uint64  // Time search took to complete, in milliseconds
+    HitCount    uint64  // The total number of documents matched
+    HitMaxScore float64 // The maximum score of all the documents matched
+
+    // Array of actual documents matched
+    Hits []{
+        Index  string  // The index the hit came from
+        Type   string  // The type the document is
+        ID     string  // The unique id of the document
+        Score  float64 // The document's score relative to the query
+        Source object  // The actual document
+    }
+}
+```
+
+#### In lua
+
+Within lua scripts the context is made available as a global variable called
+`ctx`. Fields on it are directly addressable using the above names, for example
+`ctx.HitCount` and `ctx.Hits[1].ID`.
+
+#### In go template
+
+In some areas go templates, provided by the `template/text` package. In these
+places the context is made available as the root object. For example,
+`{{.HitCount}}`.
+
+[querydsl]: https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl.html
+[querystring]: https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html#query-string-syntax
