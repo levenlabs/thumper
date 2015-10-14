@@ -8,7 +8,7 @@ import "github.com/levenlabs/thumper/search"
 // Context describes information about an alert it accumulates through its
 // life-cycle
 type Context struct {
-	Name      string
-	StartedTS uint64
-	search.Result
+	Name          string
+	StartedTS     uint64
+	search.Result `luautil:",inline"`
 }

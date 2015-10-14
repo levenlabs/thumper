@@ -12,6 +12,7 @@ import (
 
 func TestActionTPL(t *T) {
 	y := []byte(`
+interval: "* * * * *"
 actions:
   - type: pagerduty
     description: "{{.Name}}"`)

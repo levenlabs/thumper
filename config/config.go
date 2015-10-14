@@ -9,6 +9,7 @@ import (
 )
 
 var (
+	AlertFileDir      string
 	ElasticSearchAddr string
 	LuaInit           string
 	LuaVMs            int
@@ -18,6 +19,11 @@ var (
 
 func init() {
 	l := lever.New("thumper", nil)
+	l.Add(lever.Param{
+		Name:        "--alerts",
+		Aliases:     []string{"-a"},
+		Description: "Required. A yaml file, or directory with yaml files, containing alert definitions",
+	})
 	l.Add(lever.Param{
 		Name:        "--elasticsearch-addr",
 		Description: "Address to find an elasticsearch instance on",
@@ -43,6 +49,7 @@ func init() {
 	})
 	l.Parse()
 
+	AlertFileDir, _ = l.ParamStr("--alerts")
 	ElasticSearchAddr, _ = l.ParamStr("--elasticsearch-addr")
 	LuaInit, _ = l.ParamStr("--lua-init")
 	LuaVMs, _ = l.ParamInt("--lua-vms")

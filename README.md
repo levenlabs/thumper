@@ -26,29 +26,16 @@ operating independant of the others.
 
 ### The file(s)
 
-Alert configuration is defined in one or more yaml files. Each alert comprises
-one whole yaml document, like so:
+Alert configuration is defined in one or more yaml files. Each file contains an
+array of alerts, like so
 
 ```yaml
 # thumper.yml
----
-name: alert_foo
-# other alert parameters
-```
+- name: alert_foo
+  # other alert parameters
 
-`> thumper -a thumper.yaml`
-
-Multiple alerts could be defined in a single yaml file like so:
-
-```yaml
-# thumper.yml
----
-name: alert_foo
-# other alert parameters
-
----
-name: alert_bar
-# other alert parameters
+- name: alert_bar
+  # other alert parameters
 ```
 
 `> thumper -a thumper.yaml`
@@ -58,18 +45,22 @@ that directory being passed into thumper:
 
 ```yaml
 # thumper.d/foo.yml
----
-name: alert_foo
-# other alert parameters
+- name: alert_foo
+  # other alert parameters
+
+- name: alert_foo2
+  # other alert parameters
 ```
 
 and
 
 ```yaml
 # thumper.d/bar.yml
----
-name: alert_bar
-# other alert parameters
+- name: alert_bar
+  # other alert parameters
+
+- name: alert_bar2
+  # other alert parameters
 ```
 
 `> thumper -a thumper.d`
@@ -81,7 +72,7 @@ A single alert has the following fields in its document (all are required):
 ```yaml
 ---
 name: something_unique
-interval: 5 * * * *
+interval: "5 * * * *"
 search: # see the search subsection
 condition: # see the condition subsection
 actions: # see the actions subsection
@@ -223,7 +214,8 @@ actions:
 
 **OR**
 
-```actions:
+```
+actions:
     - type: lua
       lua_inline: |
         -- do some lua stuff here

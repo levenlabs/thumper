@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 
 	"github.com/Shopify/go-lua"
 	"github.com/levenlabs/go-llog"
@@ -93,6 +94,13 @@ func newRunner(i int) {
 	go r.spin()
 }
 
+func shortInline(code string) string {
+	if len(code) > 20 {
+		return code[:20] + " ..."
+	}
+	return code
+}
+
 func (r *runner) spin() {
 	kv := llog.KV{"runnerID": r.id}
 	llog.Info("initializing lua vm", kv)
@@ -115,7 +123,7 @@ func (r *runner) spin() {
 			kv["filename"] = c.filename
 			fnName, err = r.loadFile(c.filename)
 		} else {
-			kv["inline"] = c.inline[:20]
+			kv["inline"] = shortInline(c.inline)
 			fnName, err = r.loadInline(c.inline)
 		}
 		if err != nil {
@@ -166,7 +174,7 @@ func (r *runner) loadInline(code string) (string, error) {
 		return key, nil
 	}
 
-	llog.Info("loading lua inline", llog.KV{"runnerID": r.id, "inline": code[:20], "fnName": key})
+	llog.Info("loading lua inline", llog.KV{"runnerID": r.id, "inline": shortInline(code), "fnName": key})
 	if err := r.l.Load(bytes.NewBufferString(code), key, "bt"); err != nil {
 		return "", err
 	}
@@ -244,11 +252,30 @@ func pushArbitraryValue(l *lua.State, i interface{}) {
 
 func pushTableFromStruct(l *lua.State, v reflect.Value) {
 	l.NewTable()
+	pushTableFromStructInner(l, v)
+}
+
+func pushTableFromStructInner(l *lua.State, v reflect.Value) {
 	t := v.Type()
 	for j := 0; j < v.NumField(); j++ {
-		pushArbitraryValue(l, t.Field(j).Name)
-		pushArbitraryValue(l, v.Field(j).Interface())
-		l.SetTable(-3)
+		var inline bool
+		name := t.Field(j).Name
+		if tag := t.Field(j).Tag.Get("luautil"); tag != "" {
+			tagParts := strings.Split(tag, ",")
+			if tagParts[0] != "" {
+				name = tagParts[0]
+			}
+			if len(tagParts) > 1 && tagParts[1] == "inline" {
+				inline = true
+			}
+		}
+		if inline {
+			pushTableFromStructInner(l, v.Field(j))
+		} else {
+			pushArbitraryValue(l, name)
+			pushArbitraryValue(l, v.Field(j).Interface())
+			l.SetTable(-3)
+		}
 	}
 }
 

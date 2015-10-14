@@ -2,11 +2,13 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"text/template"
 	"time"
 
 	"gopkg.in/yaml.v2"
 
+	"github.com/gorhill/cronexpr"
 	"github.com/levenlabs/go-llog"
 	"github.com/levenlabs/thumper/action"
 	"github.com/levenlabs/thumper/context"
@@ -24,6 +26,7 @@ type Alert struct {
 	Condition luautil.LuaRunner `yaml:"condition"`
 	Actions   []yaml.MapSlice   `yaml:"actions"` // we keep the raw form for later templating
 
+	cron *cronexpr.Expression
 	tpls []*template.Template
 }
 
@@ -43,6 +46,13 @@ func (a *Alert) Init() error {
 		}
 		a.tpls[i] = tpl
 	}
+
+	cron, err := cronexpr.Parse(a.Interval)
+	if err != nil {
+		return fmt.Errorf("parsing interval: %s", err)
+	}
+	a.cron = cron
+
 	return nil
 }
 
@@ -62,8 +72,18 @@ func (a Alert) Run() {
 		StartedTS: uint64(time.Now().Unix()),
 	}
 
+	if query, ok := a.Search.(string); ok {
+		a.Search = map[string]interface{}{
+			"query": map[string]interface{}{
+				"query_string": map[string]interface{}{
+					"query": query,
+				},
+			},
+		}
+	}
+
 	// TODO need to be able to specify index and type in the config
-	res, err := search.Search("_all", "_all", a.Search)
+	res, err := search.Search("logstash-2015.10.14", "logs", a.Search)
 	if err != nil {
 		kv["err"] = err
 		llog.Error("failed at search step", kv)

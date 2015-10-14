@@ -30,9 +30,13 @@ type HitInfo struct {
 
 // Result describes the returned data from a search search
 type Result struct {
-	TookMS   uint64        `json:"took"`      // Time search took to complete, in milliseconds
-	TimedOut bool          `json:"timed_out"` // Whether or not the search timed out
-	HitInfo  `json:"hits"` // Information related to the actual hits
+	TookMS   uint64                          `json:"took"`      // Time search took to complete, in milliseconds
+	TimedOut bool                            `json:"timed_out"` // Whether or not the search timed out
+	HitInfo  `json:"hits" luautil:",inline"` // Information related to the actual hits
+}
+
+type elasticError struct {
+	Error string `json:"error"`
 }
 
 // Search performs a search against the given elasticsearch index for
@@ -56,9 +60,17 @@ func Search(index, typ string, search interface{}) (Result, error) {
 		return Result{}, err
 	}
 	defer resp.Body.Close()
+	dec := json.NewDecoder(resp.Body)
+
+	if resp.StatusCode != 200 {
+		var e elasticError
+		if err := dec.Decode(&e); err != nil {
+			return Result{}, err
+		}
+		return Result{}, errors.New(e.Error)
+	}
 
 	var result Result
-	dec := json.NewDecoder(resp.Body)
 	if err := dec.Decode(&result); err != nil {
 		return result, err
 	} else if result.TimedOut {
