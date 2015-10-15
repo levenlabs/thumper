@@ -50,14 +50,16 @@ func TestTableFromStruct(t *T) {
 	type Baz struct {
 		Bar `luautil:",inline"`
 		E   string
+		F   int `luautil:"-"`
 	}
 
-	i := Baz{Bar{Foo{1, "wat"}, true}, "wut"}
+	i := Baz{Bar{Foo{1, "wat"}, true}, "wut", 5}
 	testPushFrom(t, pushTableFromStruct, i, `
 		if ctx.C.A ~= 1 then return false end
 		if ctx.C.B ~= "wat" then return false end
 		if ctx.d ~= true then return false end
 		if ctx.E ~= "wut" then return false end
+		if ctx.F ~= nil then return false end
 		return true
 	`)
 }

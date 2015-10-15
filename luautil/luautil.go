@@ -262,7 +262,9 @@ func pushTableFromStructInner(l *lua.State, v reflect.Value) {
 		name := t.Field(j).Name
 		if tag := t.Field(j).Tag.Get("luautil"); tag != "" {
 			tagParts := strings.Split(tag, ",")
-			if tagParts[0] != "" {
+			if tagParts[0] == "-" {
+				continue
+			} else if tagParts[0] != "" {
 				name = tagParts[0]
 			}
 			if len(tagParts) > 1 && tagParts[1] == "inline" {
