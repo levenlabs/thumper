@@ -70,12 +70,13 @@ and
 A single alert has the following fields in its document (all are required):
 
 ```yaml
----
-name: something_unique
-interval: "5 * * * *"
-search: # see the search subsection
-condition: # see the condition subsection
-actions: # see the actions subsection
+- name: something_unique
+  interval: "5 * * * *"
+  search_index: # see the search subsection
+  search_type:  # see the search subsection
+  search:       # see the search subsection
+  condition:    # see the condition subsection
+  actions:      # see the actions subsection
 ```
 
 #### name
@@ -250,10 +251,6 @@ a description of the available data in the context, as well as how to use it
 
 #### Context fields
 
-// Hit describes one of the documents matched by a search query
-type Hit struct {
-}
-
 ```
 {
     Name      string // The alert's name
@@ -264,7 +261,9 @@ type Hit struct {
     HitCount    uint64  // The total number of documents matched
     HitMaxScore float64 // The maximum score of all the documents matched
 
-    // Array of actual documents matched
+    // Array of actual documents matched. Keep in mind that unless you manually
+    // define a limit in your search query this will be capped at 10 by
+    // elasticsearch. Usually HitCount is the important data point anyway
     Hits []{
         Index  string  // The index the hit came from
         Type   string  // The type the document is
@@ -283,7 +282,8 @@ Within lua scripts the context is made available as a global variable called
 
 #### In go template
 
-In some areas go templates, provided by the `template/text` package. In these
+In some areas go templates, provided by the `template/text` package, are used to
+add some dynamic capabilities to otherwise static configuration fields. In these
 places the context is made available as the root object. For example,
 `{{.HitCount}}`.
 
