@@ -59,8 +59,20 @@ func main() {
 				llog.Fatal("failed to initialize alert", kv)
 			}
 
-			go alertSpin(alerts[i])
+			if config.ForceRun != "" && config.ForceRun == alerts[i].Name {
+				alerts[i].Run()
+				os.Exit(0)
+			} else if config.ForceRun == "" {
+				go alertSpin(alerts[i])
+			}
 		}
+	}
+
+	// If we made it this far with --force-run set to something it means an
+	// alert by that name was never found, so we should error
+	if config.ForceRun != "" {
+		llog.Error("could not find alert with name given by --force-run")
+		os.Exit(1)
 	}
 
 	select {}

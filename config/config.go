@@ -14,6 +14,7 @@ var (
 	LuaInit           string
 	LuaVMs            int
 	PagerDutyKey      string
+	ForceRun          string
 	LogLevel          string
 )
 
@@ -43,6 +44,10 @@ func init() {
 		Description: "PagerDuty api key, required if using any pagerduty actions",
 	})
 	l.Add(lever.Param{
+		Name:        "--force-run",
+		Description: "If set with the name of an alert, will immediately run that alert and exit. Useful for testing changes to alert definitions",
+	})
+	l.Add(lever.Param{
 		Name:        "--log-level",
 		Description: "Adjust the log level. Valid options are: error, warn, info, debug",
 		Default:     "info",
@@ -55,5 +60,6 @@ func init() {
 	LuaVMs, _ = l.ParamInt("--lua-vms")
 	LogLevel, _ = l.ParamStr("--log-level")
 	PagerDutyKey, _ = l.ParamStr("--pagerduty-key")
+	ForceRun, _ = l.ParamStr("--force-run")
 	llog.SetLevelFromString(LogLevel)
 }
