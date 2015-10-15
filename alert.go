@@ -20,31 +20,51 @@ import (
 // of which will be checked against a condition. If the condition returns true a
 // set of actions will be performed
 type Alert struct {
-	Name      string            `yaml:"name"`
-	Interval  string            `yaml:"interval"`
-	Search    interface{}       `yaml:"search"`
-	Condition luautil.LuaRunner `yaml:"condition"`
-	Actions   []yaml.MapSlice   `yaml:"actions"` // we keep the raw form for later templating
+	Name        string            `yaml:"name"`
+	Interval    string            `yaml:"interval"`
+	SearchIndex string            `yaml:"search_index"`
+	SearchType  string            `yaml:"search_type"`
+	Search      interface{}       `yaml:"search"`
+	Condition   luautil.LuaRunner `yaml:"condition"`
+	Actions     []interface{}     `yaml:"actions"`
 
-	cron *cronexpr.Expression
-	tpls []*template.Template
+	cron                                     *cronexpr.Expression
+	searchIndexTPL, searchTypeTPL, searchTPL *template.Template
+	actionTPLs                               []*template.Template
+}
+
+func templatizeHelper(i interface{}, lastErr error) (*template.Template, error) {
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	var str string
+	if s, ok := i.(string); ok {
+		str = s
+	} else {
+		b, err := yaml.Marshal(i)
+		if err != nil {
+			return nil, err
+		}
+		str = string(b)
+	}
+
+	return template.New("").Parse(str)
 }
 
 // Init initializes some internal data inside the Alert, and must be called
 // after the Alert is unmarshaled from yaml (or otherwise created)
 func (a *Alert) Init() error {
-	a.tpls = make([]*template.Template, len(a.Actions))
-	for i := range a.Actions {
-		b, err := yaml.Marshal(&a.Actions[i])
-		if err != nil {
-			return err
-		}
+	var err error
+	a.searchIndexTPL, err = templatizeHelper(a.SearchIndex, err)
+	a.searchTypeTPL, err = templatizeHelper(a.SearchType, err)
+	a.searchTPL, err = templatizeHelper(&a.Search, err)
 
-		tpl, err := template.New("").Parse(string(b))
-		if err != nil {
-			return err
-		}
-		a.tpls[i] = tpl
+	a.actionTPLs = make([]*template.Template, len(a.Actions))
+	for i := range a.Actions {
+		a.actionTPLs[i], err = templatizeHelper(&a.Actions[i], err)
+	}
+	if err != nil {
+		return err
 	}
 
 	cron, err := cronexpr.Parse(a.Interval)
@@ -67,13 +87,22 @@ func (a Alert) Run() {
 		return
 	}
 
+	now := time.Now()
 	c := context.Context{
 		Name:      a.Name,
-		StartedTS: uint64(time.Now().Unix()),
+		StartedTS: uint64(now.Unix()),
+		Time:      now,
 	}
 
-	if query, ok := a.Search.(string); ok {
-		a.Search = map[string]interface{}{
+	searchIndex, searchType, searchQuery, err := a.createSearch(c)
+	if err != nil {
+		kv["err"] = err
+		llog.Error("failed to create search data", kv)
+		return
+	}
+
+	if query, ok := searchQuery.(string); ok {
+		searchQuery = map[string]interface{}{
 			"query": map[string]interface{}{
 				"query_string": map[string]interface{}{
 					"query": query,
@@ -82,8 +111,7 @@ func (a Alert) Run() {
 		}
 	}
 
-	// TODO need to be able to specify index and type in the config
-	res, err := search.Search("logstash-2015.10.14", "logs", a.Search)
+	res, err := search.Search(searchIndex, searchType, searchQuery)
 	if err != nil {
 		kv["err"] = err
 		llog.Error("failed at search step", kv)
@@ -118,13 +146,40 @@ func (a Alert) Run() {
 	}
 }
 
+func (a Alert) createSearch(c context.Context) (string, string, interface{}, error) {
+	buf := bytes.NewBuffer(make([]byte, 0, 1024))
+	if err := a.searchIndexTPL.Execute(buf, &c); err != nil {
+		return "", "", nil, err
+	}
+	searchIndex := buf.String()
+
+	buf.Reset()
+	if err := a.searchTypeTPL.Execute(buf, &c); err != nil {
+		return "", "", nil, err
+	}
+	searchType := buf.String()
+
+	buf.Reset()
+	if err := a.searchTPL.Execute(buf, &c); err != nil {
+		return "", "", nil, err
+	}
+	searchRaw := buf.Bytes()
+
+	var search interface{}
+	if err := yaml.Unmarshal(searchRaw, &search); err != nil {
+		return "", "", nil, err
+	}
+
+	return searchIndex, searchType, search, nil
+}
+
 func (a Alert) createActions(c context.Context) ([]action.Action, error) {
 	buf := bytes.NewBuffer(make([]byte, 0, 1024))
-	actions := make([]action.Action, len(a.tpls))
+	actions := make([]action.Action, len(a.actionTPLs))
 
-	for i := range a.tpls {
+	for i := range a.actionTPLs {
 		buf.Reset()
-		if err := a.tpls[i].Execute(buf, &c); err != nil {
+		if err := a.actionTPLs[i].Execute(buf, &c); err != nil {
 			return nil, err
 		}
 

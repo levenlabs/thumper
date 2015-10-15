@@ -3,7 +3,11 @@
 // This gets its own package to prevent import cycles.
 package context
 
-import "github.com/levenlabs/thumper/search"
+import (
+	"time"
+
+	"github.com/levenlabs/thumper/search"
+)
 
 // Context describes information about an alert it accumulates through its
 // life-cycle
@@ -11,4 +15,5 @@ type Context struct {
 	Name          string
 	StartedTS     uint64
 	search.Result `luautil:",inline"`
+	time.Time     `luautil:"-"`
 }

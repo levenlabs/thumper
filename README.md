@@ -95,6 +95,8 @@ simply held onto for the condition check, nothing else is done with them at this
 point.
 
 ```yaml
+search_index: logstash-{{.Format "2006.01.02"}}
+search_type: logs
 # conveniently, json is valid yaml
 search: {
         "query": {
@@ -105,16 +107,24 @@ search: {
 }
 ```
 
-As a shortcut, since a `query_string` is used so often, the abofe can also
+As a shortcut, since a `query_string` is used so often, the above can also
 simply be written as:
 
 ```yaml
+search_index: logstash-{{.Format "2006.01.02"}}
+search_type: logs
 search: "severity:fatal"
 ```
 
 See the [query dsl][querydsl] docs for more on how to formulate query objects.
 See the [query string][querystring] docs for more on how to formulate query
 strings.
+
+In the above examples you can see that the `search_index` fields uses a go
+template to generate a date specific index. All three fields (`search_index`,
+`search_type`, and `search`) can have go templating applied. See the alert
+context subsection for more information on what fields/methods are available to
+use.
 
 #### condition
 
@@ -276,6 +286,24 @@ Within lua scripts the context is made available as a global variable called
 In some areas go templates, provided by the `template/text` package. In these
 places the context is made available as the root object. For example,
 `{{.HitCount}}`.
+
+In addition to the fields defined above, the root template object also has some
+methods on it which may be helpful for working with dates. All methods defined
+on go's [time.Time](https://golang.org/pkg/time/#Time) object are available. For
+example, to format a string into the logstash index for the current day:
+
+```
+logstash-{{.Format "2006.01.02"}}
+```
+
+And to do the same, but for yesterday:
+
+```
+logstash-{{(.AddDate 0 0 -1).Format "2006.01.02"}}
+```
+
+Go's system of date format strings is a bit unique (aka weird), read more about
+it [here](https://golang.org/pkg/time/#Time.Format)
 
 [querydsl]: https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl.html
 [querystring]: https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html#query-string-syntax
