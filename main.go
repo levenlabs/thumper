@@ -61,7 +61,8 @@ func main() {
 
 			if config.ForceRun != "" && config.ForceRun == alerts[i].Name {
 				alerts[i].Run()
-				os.Exit(0)
+				time.Sleep(250 * time.Millisecond) // allow time for logs to print
+				return
 			} else if config.ForceRun == "" {
 				go alertSpin(alerts[i])
 			}

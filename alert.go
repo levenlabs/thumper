@@ -111,6 +111,7 @@ func (a Alert) Run() {
 		}
 	}
 
+	llog.Debug("running search step", kv)
 	res, err := search.Search(searchIndex, searchType, searchQuery)
 	if err != nil {
 		kv["err"] = err
@@ -119,12 +120,13 @@ func (a Alert) Run() {
 	}
 	c.Result = res
 
+	llog.Debug("running condition step", kv)
 	doActions, ok := a.Condition.Do(c)
 	if !ok {
 		llog.Error("failed at condition step", kv)
 		return
 	} else if !doActions {
-		llog.Debug("doActions returned false", kv)
+		llog.Debug("doActions is false", kv)
 		return
 	}
 
