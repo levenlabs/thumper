@@ -24,7 +24,7 @@ type Alert struct {
 	Interval    string            `yaml:"interval"`
 	SearchIndex string            `yaml:"search_index"`
 	SearchType  string            `yaml:"search_type"`
-	Search      interface{}       `yaml:"search"`
+	Search      search.Dict       `yaml:"search"`
 	Condition   luautil.LuaRunner `yaml:"condition"`
 	Actions     []interface{}     `yaml:"actions"`
 
@@ -165,7 +165,7 @@ func (a Alert) createSearch(c context.Context) (string, string, interface{}, err
 	}
 	searchRaw := buf.Bytes()
 
-	var search interface{}
+	var search search.Dict
 	if err := yaml.Unmarshal(searchRaw, &search); err != nil {
 		return "", "", nil, err
 	}

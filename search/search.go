@@ -40,6 +40,60 @@ type elasticError struct {
 	Error string `json:"error"`
 }
 
+// Dict represents a key-value map which may be unmarshalled from a yaml
+// document. It is unique in that it enforces all the keys to be strings (where
+// the default behavior in the yaml package is to have keys be interface{}), and
+// for any embedded objects it find it will decode them into Dicts instead of
+// map[interface{}]interface{}
+type Dict map[string]interface{}
+
+// UnmarshalYAML is used to unmarshal a yaml string into the Dict. See the
+// dict's doc string for more details on what it is used for
+func (d *Dict) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var m map[interface{}]interface{}
+	if err := unmarshal(&m); err != nil {
+		return err
+	}
+
+	var err error
+	*d, err = mapToDict(m)
+	return err
+}
+
+func mapToDict(m map[interface{}]interface{}) (Dict, error) {
+	d := Dict{}
+	for k, v := range m {
+		ks, ok := k.(string)
+		if !ok {
+			return nil, fmt.Errorf("non-string key found: %v", ks)
+		}
+		switch vi := v.(type) {
+		case map[interface{}]interface{}:
+			vd, err := mapToDict(vi)
+			if err != nil {
+				return nil, err
+			}
+			d[ks] = vd
+
+		case []interface{}:
+			for i := range vi {
+				if vid, ok := vi[i].(map[interface{}]interface{}); ok {
+					vd, err := mapToDict(vid)
+					if err != nil {
+						return nil, err
+					}
+					vi[i] = vd
+				}
+			}
+			d[ks] = vi
+
+		default:
+			d[ks] = vi
+		}
+	}
+	return d, nil
+}
+
 // Search performs a search against the given elasticsearch index for
 // documents of the given type. The search must json marshal into a valid
 // elasticsearch request body query
