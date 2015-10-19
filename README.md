@@ -162,6 +162,17 @@ Each action dict, before actually being processed, is run through golang's
 can see examples of using this object in the following subsections. See the
 alert context section for all fields available in the context.
 
+##### log
+
+Simply logs an INFO message to the console. Useful if you're testing an alert
+and don't want to set up any real actions yet
+
+```yaml
+actions:
+    - type: log
+      message: Performing action for alert {{.Name}}
+```
+
 ##### http
 
 Create and execute an http command. A warning is logged if anything except a 2xx

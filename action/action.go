@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/levenlabs/go-llog"
 	"github.com/levenlabs/thumper/config"
 	"github.com/levenlabs/thumper/context"
 	"github.com/levenlabs/thumper/luautil"
@@ -50,6 +51,8 @@ func (a *Action) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		a.Actioner = &PagerDuty{}
 	case "lua":
 		a.Actioner = &Lua{}
+	case "log":
+		a.Actioner = &Log{}
 	default:
 		return fmt.Errorf("invalid action type %q", a.Type)
 	}
@@ -58,6 +61,18 @@ func (a *Action) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return err
 	}
 
+	return nil
+}
+
+// Log is an action which does nothing but print a log message. Useful when
+// testing alerts and you don't want to set up any actions yet
+type Log struct {
+	Message string `yaml:"message"`
+}
+
+// Do logs the Log's message. It doesn't actually need any context
+func (l *Log) Do(_ context.Context) error {
+	llog.Info("doing log action", llog.KV{"message": l.Message})
 	return nil
 }
 
