@@ -271,6 +271,10 @@ a description of the available data in the context, as well as how to use it
         Score  float64 // The document's score relative to the query
         Source object  // The actual document
     }
+
+    // If an aggregation was defined in the search query, the results will be
+    // set here
+    Aggregations object
 }
 ```
 

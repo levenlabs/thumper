@@ -30,9 +30,10 @@ type HitInfo struct {
 
 // Result describes the returned data from a search search
 type Result struct {
-	TookMS   uint64                          `json:"took"`      // Time search took to complete, in milliseconds
-	TimedOut bool                            `json:"timed_out"` // Whether or not the search timed out
-	HitInfo  `json:"hits" luautil:",inline"` // Information related to the actual hits
+	TookMS       uint64                          `json:"took"`      // Time search took to complete, in milliseconds
+	TimedOut     bool                            `json:"timed_out"` // Whether or not the search timed out
+	HitInfo      `json:"hits" luautil:",inline"` // Information related to the actual hits
+	Aggregations map[string]interface{}          `json:"aggregations"` // Information related to aggregations in the query
 }
 
 type elasticError struct {
