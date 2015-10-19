@@ -101,16 +101,6 @@ func (a Alert) Run() {
 		return
 	}
 
-	if query, ok := searchQuery.(string); ok {
-		searchQuery = map[string]interface{}{
-			"query": map[string]interface{}{
-				"query_string": map[string]interface{}{
-					"query": query,
-				},
-			},
-		}
-	}
-
 	llog.Debug("running search step", kv)
 	res, err := search.Search(searchIndex, searchType, searchQuery)
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 
 	"github.com/levenlabs/thumper/action"
 	"github.com/levenlabs/thumper/context"
+	"github.com/levenlabs/thumper/search"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
@@ -33,42 +34,18 @@ search: {
 	c := context.Context{
 		Name: "wat",
 	}
-	searchIndex, searchType, search, err := a.createSearch(c)
+	searchIndex, searchType, searchQuery, err := a.createSearch(c)
 	require.Nil(t, err)
 	assert.Equal(t, "foo-wat", searchIndex)
 	assert.Equal(t, "bar-wat", searchType)
-	expectedSearch := map[interface{}]interface{}{
-		"query": map[interface{}]interface{}{
-			"query_string": map[interface{}]interface{}{
+	expectedSearch := search.Dict{
+		"query": search.Dict{
+			"query_string": search.Dict{
 				"query": "baz-wat",
 			},
 		},
 	}
-	assert.Equal(t, expectedSearch, search)
-}
-
-func TestInlineSearchTPL(t *T) {
-	y := []byte(`
-interval: "* * * * *"
-search_index: foo-{{.Name}}
-search_type: bar-{{.Name}}
-search: baz-{{.Name}}`)
-
-	var a Alert
-	require.Nil(t, yaml.Unmarshal(y, &a))
-	require.Nil(t, a.Init())
-	require.NotNil(t, a.searchIndexTPL)
-	require.NotNil(t, a.searchTypeTPL)
-	require.NotNil(t, a.searchTPL)
-
-	c := context.Context{
-		Name: "wat",
-	}
-	searchIndex, searchType, search, err := a.createSearch(c)
-	require.Nil(t, err)
-	assert.Equal(t, "foo-wat", searchIndex)
-	assert.Equal(t, "bar-wat", searchType)
-	assert.Equal(t, "baz-wat", search)
+	assert.Equal(t, expectedSearch, searchQuery)
 }
 
 func TestActionTPL(t *T) {

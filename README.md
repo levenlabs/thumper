@@ -108,15 +108,6 @@ search: {
 }
 ```
 
-As a shortcut, since a `query_string` is used so often, the above can also
-simply be written as:
-
-```yaml
-search_index: logstash-{{.Format "2006.01.02"}}
-search_type: logs
-search: "severity:fatal"
-```
-
 See the [query dsl][querydsl] docs for more on how to formulate query objects.
 See the [query string][querystring] docs for more on how to formulate query
 strings.
