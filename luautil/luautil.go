@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/Shopify/go-lua"
@@ -22,8 +23,9 @@ type LuaRunner struct {
 	Inline string `yaml:"lua_inline"`
 }
 
-// Do performs the actual lua code
-func (l *LuaRunner) Do(c context.Context) (bool, bool) {
+// Do performs the actual lua code, returning whatever the lua code returned, or
+// false if there was an error
+func (l *LuaRunner) Do(c context.Context) (interface{}, bool) {
 	if l.File != "" {
 		return RunFile(c, l.File)
 	} else if l.Inline != "" {
@@ -33,9 +35,9 @@ func (l *LuaRunner) Do(c context.Context) (bool, bool) {
 }
 
 type cmd struct {
-	ctx              interface{}
+	ctx              context.Context
 	filename, inline string
-	retCh            chan bool
+	retCh            chan interface{}
 }
 
 var cmdCh = make(chan cmd)
@@ -44,11 +46,11 @@ var cmdCh = make(chan cmd)
 // set as the lua global variable "ctx". The lua code is expected to return a
 // boolean value, which is passed back as the first boolean return. The second
 // boolean return will be false if there was an error and the code wasn't run
-func RunInline(ctx interface{}, code string) (bool, bool) {
+func RunInline(ctx context.Context, code string) (interface{}, bool) {
 	c := cmd{
 		ctx:    ctx,
 		inline: code,
-		retCh:  make(chan bool),
+		retCh:  make(chan interface{}),
 	}
 	cmdCh <- c
 	ret, ok := <-c.retCh
@@ -58,11 +60,11 @@ func RunInline(ctx interface{}, code string) (bool, bool) {
 // RunFile is similar to RunInline, except it takes in a filename which has the
 // lua code to run. Note that the file's contents are cached, so the file is
 // only opened and read the first time it's used.
-func RunFile(ctx interface{}, filename string) (bool, bool) {
+func RunFile(ctx context.Context, filename string) (interface{}, bool) {
 	c := cmd{
 		ctx:      ctx,
 		filename: filename,
-		retCh:    make(chan bool),
+		retCh:    make(chan interface{}),
 	}
 	cmdCh <- c
 	ret, ok := <-c.retCh
@@ -136,12 +138,11 @@ func (r *runner) spin() {
 		kv["fnName"] = fnName
 		llog.Debug("executing lua", kv)
 
-		pushArbitraryValue(r.l, c.ctx) // push ctx onto the stack
-		r.l.SetGlobal("ctx")           // set global variable "ctx" to ctx, pops it from stack
-		r.l.Global(fnName)             // push function onto stack
-		r.l.Call(0, 1)                 // call function, pops function from stack, pushes return
-		c.retCh <- r.l.ToBoolean(-1)   // send back function return
-		r.l.Remove(-1)                 // pop function return from stack
+		pushArbitraryValue(r.l, c.ctx)           // push ctx onto the stack
+		r.l.SetGlobal("ctx")                     // set global variable "ctx" to ctx, pops it from stack
+		r.l.Global(fnName)                       // push function onto stack
+		r.l.Call(0, 1)                           // call function, pops function from stack, pushes return
+		c.retCh <- pullArbitraryValue(r.l, true) // send back the function return, also popping it
 		// stack is now clean
 	}
 }
@@ -188,6 +189,59 @@ func quickSha(s string) string {
 	sh := sha1.New()
 	sh.Write([]byte(s))
 	return hex.EncodeToString(sh.Sum(nil))
+}
+
+func pullArbitraryValue(l *lua.State, remove bool) interface{} {
+	if remove {
+		defer l.Remove(-1)
+	}
+	switch t := l.TypeOf(-1); t {
+	case lua.TypeNil:
+		return nil
+	case lua.TypeBoolean:
+		return l.ToBoolean(-1)
+	case lua.TypeNumber:
+		i, _ := l.ToInteger(-1)
+		f, _ := l.ToNumber(-1)
+		if f == float64(int(f)) {
+			return i
+		}
+		return f
+	case lua.TypeString:
+		s, _ := l.ToString(-1)
+		return s
+	case lua.TypeTable:
+		m := map[string]interface{}{}
+		arrSize := 0
+		l.PushNil() // Next pops a value off the stack, so we add a dummy
+		for l.Next(-2) {
+			val := pullArbitraryValue(l, true)
+			key := pullArbitraryValue(l, false)
+
+			if keyi, ok := key.(int); ok {
+				if arrSize >= 0 && arrSize < keyi {
+					arrSize = keyi
+				}
+				key = strconv.Itoa(keyi)
+			} else {
+				arrSize = -1
+			}
+
+			m[key.(string)] = val
+		}
+
+		if arrSize >= 0 {
+			ms := make([]interface{}, arrSize)
+			for i := 0; i < arrSize; i++ {
+				ms[i] = m[strconv.Itoa(i+1)]
+			}
+			return ms
+		}
+
+		return m
+	default:
+		panic(fmt.Sprintf("unknown lua type: %s", t))
+	}
 }
 
 func pushArbitraryValue(l *lua.State, i interface{}) {

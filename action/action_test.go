@@ -6,39 +6,31 @@ import (
 	. "testing"
 
 	"github.com/levenlabs/thumper/context"
-	"github.com/levenlabs/thumper/luautil"
-
-	"gopkg.in/yaml.v2"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestYAMLUnmarshal(t *T) {
-	j := []byte(`
-type: http
-method: get
-url: http://example.com
-body: wat`)
-	a := Action{}
-	require.Nil(t, yaml.Unmarshal(j, &a))
+func TestToActioner(t *T) {
+	m := map[string]interface{}{
+		"type":   "http",
+		"method": "get",
+		"url":    "http://example.com",
+		"body":   "wat",
+	}
+	a, err := ToActioner(m)
+	assert.Nil(t, err)
 	assert.Equal(t, &HTTP{Method: "get", URL: "http://example.com", Body: "wat"}, a.Actioner)
 
-	j = []byte(`
-type: pagerduty
-incident_key: foo
-description: bar`)
-	a = Action{}
-	require.Nil(t, yaml.Unmarshal(j, &a))
+	m = map[string]interface{}{
+		"type":         "pagerduty",
+		"incident_key": "foo",
+		"description":  "bar",
+	}
+	a, err = ToActioner(m)
+	assert.Nil(t, err)
 	assert.Equal(t, &PagerDuty{Key: "foo", Description: "bar"}, a.Actioner)
 
-	j = []byte(`
-type: lua
-lua_file: foo
-lua_inline: bar`)
-	a = Action{}
-	require.Nil(t, yaml.Unmarshal(j, &a))
-	assert.Equal(t, &Lua{luautil.LuaRunner{File: "foo", Inline: "bar"}}, a.Actioner)
 }
 
 func TestHTTPAction(t *T) {
