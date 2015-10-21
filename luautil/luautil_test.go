@@ -9,6 +9,7 @@ import (
 	. "testing"
 
 	"github.com/Shopify/go-lua"
+	"github.com/levenlabs/thumper/context"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -17,6 +18,35 @@ func testLuaState() *lua.State {
 	l := lua.NewState()
 	lua.OpenLibraries(l)
 	return l
+}
+
+func TestPullArbitrary(t *T) {
+	l := testLuaState()
+	b := bytes.NewBufferString(`
+		return {
+			a = 1,
+			b = 1.1,
+			c = "foo",
+			d = {
+				e = "baz",
+			},
+			f = {"buz", 5},
+			g = {},
+		}
+	`)
+	require.Nil(t, l.Load(b, "", "bt"))
+	l.Call(0, 1)
+	i := pullArbitraryValue(l, true)
+	assert.Equal(t, map[string]interface{}{
+		"a": 1,
+		"b": 1.1,
+		"c": "foo",
+		"d": map[string]interface{}{
+			"e": "baz",
+		},
+		"f": []interface{}{"buz", 5},
+		"g": []interface{}{},
+	}, i)
 }
 
 func testPushFrom(t *T, f func(*lua.State, reflect.Value), i interface{}, code string) {
@@ -101,19 +131,19 @@ func TestTableFromSlice(t *T) {
 }
 
 func TestRun(t *T) {
-	ctx := map[string]interface{}{
-		"foo": "foo",
+	ctx := context.Context{
+		Name: "foo",
 	}
-	code := `return ctx.foo == "foo"`
+	code := `return ctx.Name == "foo"`
 
 	ret, ok := RunInline(ctx, code)
 	assert.True(t, ok)
-	assert.True(t, ret)
+	assert.Equal(t, true, ret)
 
-	ctx["foo"] = false
+	ctx.Name = "bar"
 	ret, ok = RunInline(ctx, code)
 	assert.True(t, ok)
-	assert.False(t, ret)
+	assert.Equal(t, false, ret)
 
 	f, err := ioutil.TempFile("", "")
 	require.Nil(t, err)
@@ -123,13 +153,15 @@ func TestRun(t *T) {
 	require.Nil(t, err)
 	f.Close()
 
-	ctx["foo"] = "foo"
+	ctx = context.Context{
+		Name: "foo",
+	}
 	ret, ok = RunFile(ctx, filename)
 	assert.True(t, ok)
-	assert.True(t, ret)
+	assert.Equal(t, true, ret)
 
-	ctx["foo"] = false
+	ctx.Name = "bar"
 	ret, ok = RunFile(ctx, filename)
 	assert.True(t, ok)
-	assert.False(t, ret)
+	assert.Equal(t, false, ret)
 }

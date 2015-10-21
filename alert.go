@@ -25,12 +25,10 @@ type Alert struct {
 	SearchIndex string            `yaml:"search_index"`
 	SearchType  string            `yaml:"search_type"`
 	Search      search.Dict       `yaml:"search"`
-	Condition   luautil.LuaRunner `yaml:"condition"`
-	Actions     []interface{}     `yaml:"actions"`
+	Process     luautil.LuaRunner `yaml:"process"`
 
 	cron                                     *cronexpr.Expression
 	searchIndexTPL, searchTypeTPL, searchTPL *template.Template
-	actionTPLs                               []*template.Template
 }
 
 func templatizeHelper(i interface{}, lastErr error) (*template.Template, error) {
@@ -58,11 +56,6 @@ func (a *Alert) Init() error {
 	a.searchIndexTPL, err = templatizeHelper(a.SearchIndex, err)
 	a.searchTypeTPL, err = templatizeHelper(a.SearchType, err)
 	a.searchTPL, err = templatizeHelper(&a.Search, err)
-
-	a.actionTPLs = make([]*template.Template, len(a.Actions))
-	for i := range a.Actions {
-		a.actionTPLs[i], err = templatizeHelper(&a.Actions[i], err)
-	}
 	if err != nil {
 		return err
 	}
@@ -81,11 +74,6 @@ func (a Alert) Run() {
 		"name": a.Name,
 	}
 	llog.Info("running alert", kv)
-
-	if len(a.Actions) == 0 {
-		llog.Warn("no actions defined, not even going to bother running", kv)
-		return
-	}
 
 	now := time.Now()
 	c := context.Context{
@@ -110,21 +98,29 @@ func (a Alert) Run() {
 	}
 	c.Result = res
 
-	llog.Debug("running condition step", kv)
-	doActions, ok := a.Condition.Do(c)
+	llog.Debug("running process step", kv)
+	processRes, ok := a.Process.Do(c)
 	if !ok {
-		llog.Error("failed at condition step", kv)
-		return
-	} else if !doActions {
-		llog.Debug("doActions is false", kv)
+		llog.Error("failed at process step", kv)
 		return
 	}
 
-	actions, err := a.createActions(c)
-	if err != nil {
-		kv["err"] = err
-		llog.Error("failed to create action data", kv)
-		return
+	// if processRes isn't an []interface{}, actionsRaw will be the nil value of
+	// []interface{}, which has a length of 0, so either way this works
+	actionsRaw, _ := processRes.([]interface{})
+	if len(actionsRaw) == 0 {
+		llog.Debug("no actions returned", kv)
+	}
+
+	actions := make([]action.Action, len(actionsRaw))
+	for i := range actionsRaw {
+		a, err := action.ToActioner(actionsRaw[i])
+		if err != nil {
+			kv["err"] = err
+			llog.Error("error unpacking action", kv)
+			return
+		}
+		actions[i] = a
 	}
 
 	for i := range actions {
@@ -163,23 +159,4 @@ func (a Alert) createSearch(c context.Context) (string, string, interface{}, err
 	}
 
 	return searchIndex, searchType, search, nil
-}
-
-func (a Alert) createActions(c context.Context) ([]action.Action, error) {
-	buf := bytes.NewBuffer(make([]byte, 0, 1024))
-	actions := make([]action.Action, len(a.actionTPLs))
-
-	for i := range a.actionTPLs {
-		buf.Reset()
-		if err := a.actionTPLs[i].Execute(buf, &c); err != nil {
-			return nil, err
-		}
-
-		b := buf.Bytes()
-		if err := yaml.Unmarshal(b, &actions[i]); err != nil {
-			return nil, err
-		}
-	}
-
-	return actions, nil
 }

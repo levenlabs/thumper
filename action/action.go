@@ -13,7 +13,7 @@ import (
 	"github.com/levenlabs/go-llog"
 	"github.com/levenlabs/thumper/config"
 	"github.com/levenlabs/thumper/context"
-	"github.com/levenlabs/thumper/luautil"
+	"github.com/mitchellh/mapstructure"
 )
 
 // Actioner describes an action type. There all multiple action types, but they
@@ -25,49 +25,45 @@ type Actioner interface {
 	Do(context.Context) error
 }
 
-// Action is a wrapper around an Actioner which can be yaml unmarshalled into
-// easily
+// Action is a wrapper around an Actioner which contains some type information
 type Action struct {
 	Type string
 	Actioner
 }
 
-// UnmarshalYAML unmarshals the given yaml into the embedded Actioner, depending
-// on the type field in the yaml
-func (a *Action) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	at := struct {
-		Type string `yaml:"type"`
-	}{}
-
-	if err := unmarshal(&at); err != nil {
-		return err
+// ToActioner takes in some arbitrary data (hopefully a map[string]interface{},
+// looks at its "type" key, and any other fields necessary based on that type,
+// and returns an Actioner (or an error)
+func ToActioner(in interface{}) (Action, error) {
+	min, ok := in.(map[string]interface{})
+	if !ok {
+		return Action{}, errors.New("action definition is not an object")
 	}
-	a.Type = strings.ToLower(at.Type)
 
-	switch a.Type {
-	case "http":
-		a.Actioner = &HTTP{}
-	case "pagerduty":
-		a.Actioner = &PagerDuty{}
-	case "lua":
-		a.Actioner = &Lua{}
+	var a Actioner
+	typ, _ := min["type"].(string)
+	typ = strings.ToLower(typ)
+	switch typ {
 	case "log":
-		a.Actioner = &Log{}
+		a = &Log{}
+	case "http":
+		a = &HTTP{}
+	case "pagerduty":
+		a = &PagerDuty{}
 	default:
-		return fmt.Errorf("invalid action type %q", a.Type)
+		return Action{}, fmt.Errorf("unknown action type: %q", typ)
 	}
 
-	if err := unmarshal(a.Actioner); err != nil {
-		return err
+	if err := mapstructure.Decode(min, a); err != nil {
+		return Action{}, err
 	}
-
-	return nil
+	return Action{Type: typ, Actioner: a}, nil
 }
 
 // Log is an action which does nothing but print a log message. Useful when
 // testing alerts and you don't want to set up any actions yet
 type Log struct {
-	Message string `yaml:"message"`
+	Message string `mapstructure:"message"`
 }
 
 // Do logs the Log's message. It doesn't actually need any context
@@ -79,10 +75,10 @@ func (l *Log) Do(_ context.Context) error {
 // HTTP is an action which performs a single http request. If the request's
 // response doesn't have a 2xx response code then it's considered an error
 type HTTP struct {
-	Method  string            `yaml:"method"`
-	URL     string            `yaml:"url"`
-	Headers map[string]string `yaml:"headers"`
-	Body    string            `yaml:"body"`
+	Method  string            `mapstructure:"method"`
+	URL     string            `mapstructure:"url"`
+	Headers map[string]string `mapstructure:"headers"`
+	Body    string            `mapstructure:"body"`
 }
 
 // Do performs the actual http request. It doesn't need the alert context
@@ -113,9 +109,9 @@ func (h *HTTP) Do(_ context.Context) error {
 
 // PagerDuty submits a trigger to a pagerduty endpoint
 type PagerDuty struct {
-	Key         string                 `yaml:"incident_key"`
-	Description string                 `yaml:"description"`
-	Details     map[string]interface{} `yaml:"details"`
+	Key         string                 `mapstructure:"incident_key"`
+	Description string                 `mapstructure:"description"`
+	Details     map[string]interface{} `mapstructure:"details"`
 }
 
 // Do performs the actual trigger request to the pagerduty api
@@ -148,17 +144,4 @@ func (p *PagerDuty) Do(c context.Context) error {
 
 	_, err = http.DefaultClient.Do(r)
 	return err
-}
-
-// Lua is a wrapper around a LuaRunner which implements the Actioner interface
-type Lua struct {
-	luautil.LuaRunner `yaml:",inline"`
-}
-
-// Do performs the lua action
-func (l *Lua) Do(c context.Context) error {
-	if _, ok := l.LuaRunner.Do(c); !ok {
-		return errors.New("error running lua action")
-	}
-	return nil
 }

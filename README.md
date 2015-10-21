@@ -12,14 +12,13 @@ like the elasticsearch address, api keys for pagerduty, etc...
 ## Alert configuration
 
 Another configuration file (or set of configuration files) is also used, this
-one being required and containing all checks which should be performed, as well
-as the actions which should be taken should a condition come back true. A single
-"alert" encompasses all of the following:
+one being required and containing all data processing which should be performed.
+A single "alert" encompasses all of the following:
 
 * A time interval to perform the alert check at
 * A search to be performed against elasticsearch
-* A condition to check the search results against
-* A set of actions to take should the condition return true
+* A lua script which processes the search results and decides what actions to
+  take
 
 thumper runs with one or more alerts defined in its configuration, each one
 operating independant of the others.
@@ -75,8 +74,7 @@ A single alert has the following fields in its document (all are required):
   search_index: # see the search subsection
   search_type:  # see the search subsection
   search:       # see the search subsection
-  condition:    # see the condition subsection
-  actions:      # see the actions subsection
+  process:      # see the process subsection
 ```
 
 #### name
@@ -87,12 +85,12 @@ of the defined alerts.
 #### interval
 
 A cron-style interval string describing when the search should be run and have
-the condition checked against it.
+the process run on the results.
 
 #### search
 
 The search which should be performed against elasticsearch. The results are
-simply held onto for the condition check, nothing else is done with them at this
+simply held onto for the process step, nothing else is done with them at this
 point.
 
 ```yaml
@@ -118,130 +116,99 @@ template to generate a date specific index. All three fields (`search_index`,
 context subsection for more information on what fields/methods are available to
 use.
 
-#### condition
+#### process
 
-Once the search is performed the results are checked against this step to
-determine if they warrant performing the alert's actions. Conditionals are
-defined as lua scripts, either files or simply inline with the yaml itself. The
-search result's data can be accessed through the `ctx` global variable. See the
-alert context section for all available fields in `ctx`.
+Once the search is performed the results are kept in the context, which is then
+passed into this step. The process lua script then checks these results against
+whatever conditions are desired, and may optionally return a list of actions to
+take. See the alert context section for all available fields in `ctx`.
 
 ```yaml
-condition:
-    lua_file: ./foo-condition.yml
+process:
+    lua_file: ./foo-process.yml
 ```
 
 **OR**
 
 ```yaml
-condition:
+process:
     lua_inline: |
         if ctx.HitCount > 10 then
-            return true
+            return {
+                {
+                    type = "log",
+                    message = "got " .. ctx.HitCount .. " hits",
+                }
+            }
         end
-        return false
+        -- To indicate no actions, you can return an empty table, nil, or simply
+        -- don't return at all
+        return {}
 ```
 
-#### actions
+##### actions
 
-A list of actions to take should the condition check return true. Each element
-in the list is a dict with a `type` key describing the action's type, the rest
-of the possible keys differ based on what the type is.
+The table returned by process is a list of actions which should be taken. Each
+action has a type and subsequent fields based on that type.
 
-Each action dict, before actually being processed, is run through golang's
-`template/text` system with the action's context object as the root template object. You
-can see examples of using this object in the following subsections. See the
-alert context section for all fields available in the context.
-
-##### log
+###### log
 
 Simply logs an INFO message to the console. Useful if you're testing an alert
 and don't want to set up any real actions yet
 
-```yaml
-actions:
-    - type: log
-      message: Performing action for alert {{.Name}}
+```lua
+{
+    type = "log",
+    message = "Performing action for alert " .. ctx.Name,
+}
 ```
 
-##### http
+###### http
 
 Create and execute an http command. A warning is logged if anything except a 2xx
 response code is returned.
 
 Example:
 
-```yaml
-actions:
-    - type: http
-      method: POST # optional, defaults to GET
-      url: http://example.com/some/endpoint?ARG1=foo
-      headers: # optional
-        X-Foo: whatever
-      body: > # optional
-        {
-            "name":"{{.Name}}",
-            "message":"something terrible has happened"
-        }
+```lua
+{
+    type = "http",
+    method = "POST", -- optional, defaults to GET
+    url = "http://example.com/some/endpoint?ARG1=foo",
+    headers = { -- optional
+        "X-FOO" = "something",
+    },
+    body = "some body for " .. ctx.Name, -- optional
+}
 ```
 
-##### pagerduty
+###### pagerduty
 
 Triggers an event in pagerduty. The `--pagerduty-key` param must be set in the
 runtime configuration in order to use this action type.
 
 Example:
 
-```yaml
-actions:
-    - type: pagerduty
+```lua
+{
+    type = "pagerduty",
 
-      # Defaults to the alert's name. This is used to de-duplicate triggers on
-      # pagerduty's end
-      #incident_key:
+    -- optional, defaults to alert's name, used to de-duplicate triggers on
+    -- pagerduty's end
+    incident_key = "something",
 
-      # While it's possible to use templated terms in here, it makes the most
-      # sense to have this be a static key and use the details dict for dynamic
-      # data
-      description: A short message about the error
+    -- While it's possible to use templated terms in here, it makes the most
+    -- sense to have this be a static key and use the details dict for dynamic
+    -- data
+    description = "A short message about the error",
 
-      # Optional dict of extra contextual data about this alert
-      details:
-        foo: "{{.Some.Data}}"
-        bar: baz
+    -- Optional table of extra contextural data about this alert
+    details = {
+        foo = ctx.Some.Data,
+        bar = "baz",
+    },
+}
 ```
-
-##### lua
-
-Similar to condition, lua can be used to perform virtually any action you might
-think of. Also, as in condition, the `ctx` global variable will be made
-available with all the result data from the search.
-
-Example:
-
-```
-actions:
-    - type: lua
-      lua_file: ./some-action.yml
-```
-
-**OR**
-
-```
-actions:
-    - type: lua
-      lua_inline: |
-        -- do some lua stuff here
-        -- no need to return anything
-```
-
-*Note that the go templating will still be applied to the lua action definition
-before it is processed. It's therefore possible to incorporate go template
-entities into your `lua_inline`. This is not recommended, as this would cause
-unbounded growth in the lua function cache, and the exact same data is available
-in `ctx` anyway. It's also possible to dynamically load different `lua_file`s
-depending on various conditions. It's not clear why this would be useful, but
-it's probably fine to do*
 
 ### Alert context
 
@@ -249,7 +216,7 @@ Through its lifecycle each alert has a context object attached to it. The
 results from the search step are included in it, as well as other data. Here is
 a description of the available data in the context, as well as how to use it
 
-*NOTE THAT THE CONTEXT IS READ-ONLY IN ALL CASES*
+**NOTE THAT THE CONTEXT IS READ-ONLY IN ALL CASES**
 
 #### Context fields
 
