@@ -15,6 +15,7 @@ var (
 	LuaVMs            int
 	PagerDutyKey      string
 	ForceRun          string
+	WarnMissingIndex  bool
 	LogLevel          string
 )
 
@@ -48,6 +49,11 @@ func init() {
 		Description: "If set with the name of an alert, will immediately run that alert and exit. Useful for testing changes to alert definitions",
 	})
 	l.Add(lever.Param{
+		Name:        "--warn-missing-index",
+		Description: "When set, if an alert encounters an IndexMissingException a warning will be logged instead of an error",
+		Flag:        true,
+	})
+	l.Add(lever.Param{
 		Name:        "--log-level",
 		Description: "Adjust the log level. Valid options are: error, warn, info, debug",
 		Default:     "info",
@@ -61,5 +67,6 @@ func init() {
 	LogLevel, _ = l.ParamStr("--log-level")
 	PagerDutyKey, _ = l.ParamStr("--pagerduty-key")
 	ForceRun, _ = l.ParamStr("--force-run")
+	WarnMissingIndex = l.ParamFlag("--warn-missing-index")
 	llog.SetLevelFromString(LogLevel)
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"text/template"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/gorhill/cronexpr"
 	"github.com/levenlabs/go-llog"
 	"github.com/levenlabs/thumper/action"
+	"github.com/levenlabs/thumper/config"
 	"github.com/levenlabs/thumper/context"
 	"github.com/levenlabs/thumper/luautil"
 	"github.com/levenlabs/thumper/search"
@@ -93,7 +95,12 @@ func (a Alert) Run() {
 	res, err := search.Search(searchIndex, searchType, searchQuery)
 	if err != nil {
 		kv["err"] = err
-		llog.Error("failed at search step", kv)
+		isIndexMissing := strings.HasPrefix(err.Error(), "IndexMissingException")
+		if isIndexMissing && config.WarnMissingIndex {
+			llog.Warn("failed at search step, skipping", kv)
+		} else {
+			llog.Error("failed at search step", kv)
+		}
 		return
 	}
 	c.Result = res
