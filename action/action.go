@@ -142,6 +142,10 @@ func (p *PagerDuty) Do(c context.Context) error {
 	}
 	r.Header.Set("Content-Type", "application/json")
 
-	_, err = http.DefaultClient.Do(r)
-	return err
+	resp, err := http.DefaultClient.Do(r)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	return nil
 }
