@@ -149,3 +149,55 @@ func (p *PagerDuty) Do(c context.Context) error {
 	resp.Body.Close()
 	return nil
 }
+
+// OpsGenie submits an alert to an opsgenie endpoint
+type OpsGenie struct {
+	APIKey  string `json:"apiKey"`
+	Message string `json:"message" mapstructure:"message"`
+	// Optional Params
+	Teams       []string          `json:"teams" mapstructure:"teams"`
+	Alias       string            `json:"alias" mapstructure:"alias"`
+	Description string            `json:"description" mapstructure:"description"`
+	Recipients  []string          `json:"recipients" mapstructure:"recipients"`
+	Actions     string            `json:"actions" mapstructure:"actions"`
+	Source      string            `json:"source" mapstructure:"source"`
+	Tags        string            `json:"tags" mapstructure:"tags"`
+	Details     map[string]string `json:"details" mapstructure:"details"`
+	User        string            `json:"user" mapstructure:"user"`
+	Note        string            `json:"note" mapstructure:"note"`
+}
+
+// Do performs the actual alert request to the opsgenie api
+func (o *OpsGenie) Do(c context.Context) error {
+	if config.OpsGenieKey == "" {
+		return errors.New("opsgenie key not set in config")
+	}
+	o.APIKey = config.OpsGenieKey
+
+	if o.Alias == "" {
+		o.Alias = c.Name
+	}
+
+	if p.Message == "" {
+		return errors.New("missing required field messages in OpsGenie")
+	}
+
+	bodyb, err := json.Marshal(&o)
+	if err != nil {
+		return err
+	}
+
+	u := "https://api.opsgenie.com/v1/json/alert"
+	r, err := http.NewRequest("POST", u, bytes.NewBuffer(bodyb))
+	if err != nil {
+		return err
+	}
+	r.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(r)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	return nil
+}

@@ -14,6 +14,7 @@ var (
 	LuaInit           string
 	LuaVMs            int
 	PagerDutyKey      string
+	OpsGenieKey       string
 	ForceRun          string
 	LogLevel          string
 )
@@ -44,6 +45,10 @@ func init() {
 		Description: "PagerDuty api key, required if using any pagerduty actions",
 	})
 	l.Add(lever.Param{
+		Name:        "--opsgenie-key",
+		Description: "OpsGenie api key, required if using any opsgenie actions",
+	})
+	l.Add(lever.Param{
 		Name:        "--force-run",
 		Description: "If set with the name of an alert, will immediately run that alert and exit. Useful for testing changes to alert definitions",
 	})
@@ -60,6 +65,7 @@ func init() {
 	LuaVMs, _ = l.ParamInt("--lua-vms")
 	LogLevel, _ = l.ParamStr("--log-level")
 	PagerDutyKey, _ = l.ParamStr("--pagerduty-key")
+	OpsGenieKey, _ = l.ParamStr("--opsgenie-key")
 	ForceRun, _ = l.ParamStr("--force-run")
 	llog.SetLevelFromString(LogLevel)
 }

@@ -210,6 +210,30 @@ Example:
 }
 ```
 
+###### opsgenie
+
+Triggers an alert in OpsGenie. The `--opsgenie-key` param must be set in the
+runtime configuration in order to use this action type.
+
+Example:
+
+```lua
+{
+    type = "opsgenie",
+
+    -- required alert message
+    message = "what the alert is",
+
+    -- optional, defaults to alert's name, used to de-duplicate triggers on
+    -- opsgenie's end
+    alias = "something"
+
+    -- see opsgenie api create alert documention for the rest of the valid
+    -- optional parameters
+    -- https://www.opsgenie.com/docs/web-api/alert-api#createAlertRequest
+}
+```
+
 ### Alert context
 
 Through its lifecycle each alert has a context object attached to it. The
