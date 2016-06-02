@@ -178,7 +178,7 @@ func (o *OpsGenie) Do(c context.Context) error {
 		o.Alias = c.Name
 	}
 
-	if p.Message == "" {
+	if o.Message == "" {
 		return errors.New("missing required field messages in OpsGenie")
 	}
 
