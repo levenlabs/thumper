@@ -50,6 +50,8 @@ func ToActioner(in interface{}) (Action, error) {
 		a = &HTTP{}
 	case "pagerduty":
 		a = &PagerDuty{}
+	case "opsgenie":
+		a = &OpsGenie{}
 	default:
 		return Action{}, fmt.Errorf("unknown action type: %q", typ)
 	}
