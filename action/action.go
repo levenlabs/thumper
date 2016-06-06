@@ -157,16 +157,16 @@ type OpsGenie struct {
 	APIKey  string `json:"apiKey"`
 	Message string `json:"message" mapstructure:"message"`
 	// Optional Params
-	Teams       []string          `json:"teams" mapstructure:"teams"`
-	Alias       string            `json:"alias" mapstructure:"alias"`
-	Description string            `json:"description" mapstructure:"description"`
-	Recipients  []string          `json:"recipients" mapstructure:"recipients"`
-	Actions     string            `json:"actions" mapstructure:"actions"`
-	Source      string            `json:"source" mapstructure:"source"`
-	Tags        string            `json:"tags" mapstructure:"tags"`
-	Details     map[string]string `json:"details" mapstructure:"details"`
-	User        string            `json:"user" mapstructure:"user"`
-	Note        string            `json:"note" mapstructure:"note"`
+	Teams       []string               `json:"teams" mapstructure:"teams"`
+	Alias       string                 `json:"alias" mapstructure:"alias"`
+	Description string                 `json:"description" mapstructure:"description"`
+	Recipients  []string               `json:"recipients" mapstructure:"recipients"`
+	Actions     string                 `json:"actions" mapstructure:"actions"`
+	Source      string                 `json:"source" mapstructure:"source"`
+	Tags        string                 `json:"tags" mapstructure:"tags"`
+	Details     map[string]interface{} `json:"details" mapstructure:"details"`
+	User        string                 `json:"user" mapstructure:"user"`
+	Note        string                 `json:"note" mapstructure:"note"`
 }
 
 // Do performs the actual alert request to the opsgenie api
