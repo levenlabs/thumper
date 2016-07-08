@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 
+	"github.com/levenlabs/go-llog"
 	"github.com/levenlabs/thumper/config"
 )
 
@@ -100,12 +102,12 @@ func mapToDict(m map[interface{}]interface{}) (Dict, error) {
 // (see https://www.elastic.co/guide/en/elasticsearch/reference/current/search-request-body.html)
 func Search(index, typ string, search interface{}) (Result, error) {
 	u := fmt.Sprintf("http://%s/%s/%s/_search", config.ElasticSearchAddr, index, typ)
-	body, err := json.Marshal(search)
+	bodyReq, err := json.Marshal(search)
 	if err != nil {
 		return Result{}, err
 	}
 
-	req, err := http.NewRequest("GET", u, bytes.NewBuffer(body))
+	req, err := http.NewRequest("GET", u, bytes.NewBuffer(bodyReq))
 	if err != nil {
 		return Result{}, err
 	}
@@ -115,18 +117,26 @@ func Search(index, typ string, search interface{}) (Result, error) {
 		return Result{}, err
 	}
 	defer resp.Body.Close()
-	dec := json.NewDecoder(resp.Body)
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return Result{}, err
+	}
 
 	if resp.StatusCode != 200 {
 		var e elasticError
-		if err := dec.Decode(&e); err != nil {
+		if err := json.Unmarshal(body, &e); err != nil {
 			return Result{}, err
 		}
 		return Result{}, errors.New(e.Error)
 	}
 
 	var result Result
-	if err := dec.Decode(&result); err != nil {
+	if err := json.Unmarshal(body, &result); err != nil {
+		llog.Error("could not unmarshal search result", llog.KV{
+			"err":  err,
+			"body": string(body),
+		})
 		return result, err
 	} else if result.TimedOut {
 		return result, errors.New("search timed out in elasticsearch")
