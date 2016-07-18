@@ -126,6 +126,10 @@ func Search(index, typ string, search interface{}) (Result, error) {
 	if resp.StatusCode != 200 {
 		var e elasticError
 		if err := json.Unmarshal(body, &e); err != nil {
+			llog.Error("could not unmarshal error body", llog.KV{
+				"err":  err,
+				"body": string(body),
+			})
 			return Result{}, err
 		}
 		return Result{}, errors.New(e.Error)
