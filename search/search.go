@@ -39,7 +39,7 @@ type Result struct {
 }
 
 type elasticError struct {
-	Error string `json:"error"`
+	Error string `json:"reason"`
 }
 
 // Dict represents a key-value map which may be unmarshalled from a yaml
