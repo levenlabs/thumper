@@ -123,13 +123,13 @@ func Search(index, typ string, search interface{}) (Result, error) {
 		return Result{}, err
 	}
 
+	kv := llog.KV{"body": string(body)}
+	llog.Debug("search results", kv)
+
 	if resp.StatusCode != 200 {
 		var e elasticError
 		if err := json.Unmarshal(body, &e); err != nil {
-			llog.Error("could not unmarshal error body", llog.KV{
-				"err":  err,
-				"body": string(body),
-			})
+			llog.Error("could not unmarshal error body", kv, llog.ErrKV(err))
 			return Result{}, err
 		}
 		return Result{}, errors.New(e.Error)
@@ -137,10 +137,7 @@ func Search(index, typ string, search interface{}) (Result, error) {
 
 	var result Result
 	if err := json.Unmarshal(body, &result); err != nil {
-		llog.Error("could not unmarshal search result", llog.KV{
-			"err":  err,
-			"body": string(body),
-		})
+		llog.Error("could not unmarshal search result", kv, llog.ErrKV(err))
 		return result, err
 	} else if result.TimedOut {
 		return result, errors.New("search timed out in elasticsearch")
