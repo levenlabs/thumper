@@ -153,8 +153,10 @@ func (p *PagerDuty) Do(c context.Context) error {
 }
 
 type opsGenieResponder struct {
-	ID   string `json:"id" mapstructure:"id"`
-	Type string `json:"type" mapstructure:"type"`
+	ID       string `json:"id,omitempty" mapstructure:"id"`
+	Name     string `json:"name,omitempty" mapstructure:"name"`
+	Username string `json:"username,omitempty" mapstructure:"username"`
+	Type     string `json:"type" mapstructure:"type"`
 }
 
 // OpsGenie submits an alert to an opsgenie endpoint
@@ -165,13 +167,13 @@ type OpsGenie struct {
 	Alias       string                 `json:"alias" mapstructure:"alias"`
 	Description string                 `json:"description" mapstructure:"description"`
 	Recipients  []string               `json:"-" mapstructure:"recipients"`
-	Actions     string                 `json:"actions" mapstructure:"actions"`
+	Actions     []string               `json:"actions,omitempty" mapstructure:"actions"`
 	Source      string                 `json:"source" mapstructure:"source"`
-	Tags        string                 `json:"tags" mapstructure:"tags"`
+	Tags        []string               `json:"tags,omitempty" mapstructure:"tags"`
 	Details     map[string]interface{} `json:"details" mapstructure:"details"`
 	User        string                 `json:"user" mapstructure:"user"`
 	Note        string                 `json:"note" mapstructure:"note"`
-	Responders  []opsGenieResponder    `json:"responders" mapstructure:"responders"`
+	Responders  []opsGenieResponder    `json:"responders,omitempty" mapstructure:"responders"`
 }
 
 // Do performs the actual alert request to the opsgenie api
@@ -192,15 +194,24 @@ func (o *OpsGenie) Do(c context.Context) error {
 	if len(o.Responders) == 0 {
 		for _, r := range o.Recipients {
 			o.Responders = append(o.Responders, opsGenieResponder{
-				ID:   r,
-				Type: "user",
+				Username: r,
+				Type:     "user",
 			})
 		}
 		for _, t := range o.Teams {
 			o.Responders = append(o.Responders, opsGenieResponder{
-				ID:   t,
+				Name: t,
 				Type: "team",
 			})
+		}
+	}
+
+	// convert all non-strings into strings
+	for k, d := range o.Details {
+		if sv, ok := d.(string); ok {
+			o.Details[k] = sv
+		} else {
+			o.Details[k] = fmt.Sprintf("%v", d)
 		}
 	}
 
@@ -208,7 +219,6 @@ func (o *OpsGenie) Do(c context.Context) error {
 	if err != nil {
 		return err
 	}
-
 	u := "https://api.opsgenie.com/v2/alerts"
 	r, err := http.NewRequest("POST", u, bytes.NewBuffer(bodyb))
 	if err != nil {
@@ -221,10 +231,16 @@ func (o *OpsGenie) Do(c context.Context) error {
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
+
+	res := struct {
+		Message string `json:"message"`
+	}{}
+	// ignore error
+	json.NewDecoder(resp.Body).Decode(&res)
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
-		return fmt.Errorf("unexpected status code from opsgenie: %d", resp.StatusCode)
+		return fmt.Errorf("unexpected status code from opsgenie: %s. Message: %s", resp.Status, res.Message)
 	}
 	return nil
 }

@@ -230,7 +230,7 @@ Example:
 
     -- see opsgenie api create alert documention for the rest of the valid
     -- optional parameters
-    -- https://www.opsgenie.com/docs/web-api/alert-api#createAlertRequest
+    -- https://docs.opsgenie.com/docs/alert-api#section-create-alert
 }
 ```
 
