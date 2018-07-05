@@ -152,21 +152,26 @@ func (p *PagerDuty) Do(c context.Context) error {
 	return nil
 }
 
+type opsGenieResponder struct {
+	ID   string `json:"id" mapstructure:"id"`
+	Type string `json:"type" mapstructure:"type"`
+}
+
 // OpsGenie submits an alert to an opsgenie endpoint
 type OpsGenie struct {
-	APIKey  string `json:"apiKey"`
 	Message string `json:"message" mapstructure:"message"`
 	// Optional Params
-	Teams       []string               `json:"teams" mapstructure:"teams"`
+	Teams       []string               `json:"-" mapstructure:"teams"`
 	Alias       string                 `json:"alias" mapstructure:"alias"`
 	Description string                 `json:"description" mapstructure:"description"`
-	Recipients  []string               `json:"recipients" mapstructure:"recipients"`
+	Recipients  []string               `json:"-" mapstructure:"recipients"`
 	Actions     string                 `json:"actions" mapstructure:"actions"`
 	Source      string                 `json:"source" mapstructure:"source"`
 	Tags        string                 `json:"tags" mapstructure:"tags"`
 	Details     map[string]interface{} `json:"details" mapstructure:"details"`
 	User        string                 `json:"user" mapstructure:"user"`
 	Note        string                 `json:"note" mapstructure:"note"`
+	Responders  []opsGenieResponder    `json:"responders" mapstructure:"responders"`
 }
 
 // Do performs the actual alert request to the opsgenie api
@@ -174,7 +179,6 @@ func (o *OpsGenie) Do(c context.Context) error {
 	if config.OpsGenieKey == "" {
 		return errors.New("opsgenie key not set in config")
 	}
-	o.APIKey = config.OpsGenieKey
 
 	if o.Alias == "" {
 		o.Alias = c.Name
@@ -184,22 +188,43 @@ func (o *OpsGenie) Do(c context.Context) error {
 		return errors.New("missing required field messages in OpsGenie")
 	}
 
+	// convert teams/recipients to responders if none were given
+	if len(o.Responders) == 0 {
+		for _, r := range o.Recipients {
+			o.Responders = append(o.Responders, opsGenieResponder{
+				ID:   r,
+				Type: "user",
+			})
+		}
+		for _, t := range o.Teams {
+			o.Responders = append(o.Responders, opsGenieResponder{
+				ID:   t,
+				Type: "team",
+			})
+		}
+	}
+
 	bodyb, err := json.Marshal(&o)
 	if err != nil {
 		return err
 	}
 
-	u := "https://api.opsgenie.com/v1/json/alert"
+	u := "https://api.opsgenie.com/v2/alerts"
 	r, err := http.NewRequest("POST", u, bytes.NewBuffer(bodyb))
 	if err != nil {
 		return err
 	}
 	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("Authorization", fmt.Sprintf("GenieKey %s", config.OpsGenieKey))
 
 	resp, err := http.DefaultClient.Do(r)
 	if err != nil {
 		return err
 	}
 	resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
+		return fmt.Errorf("unexpected status code from opsgenie: %d", resp.StatusCode)
+	}
 	return nil
 }
