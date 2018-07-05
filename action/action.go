@@ -189,6 +189,7 @@ func (o *OpsGenie) Do(c context.Context) error {
 		return err
 	}
 
+	fmt.Println(string(bodyb))
 	u := "https://api.opsgenie.com/v1/json/alert"
 	r, err := http.NewRequest("POST", u, bytes.NewBuffer(bodyb))
 	if err != nil {
